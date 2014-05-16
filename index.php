@@ -5,6 +5,7 @@ ft_init_module_page();
 
 $folder = dirname(__FILE__);
 require_once("$folder/library.php");
+$form_id = $_POST["form_id"];
 
 // ------------------------------------------------------------------------------------------------
 

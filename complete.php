@@ -19,19 +19,17 @@ if (isset($_POST["form_id"]))
     "form_disabled"    => $form_disabled,
     "form_permissions" => $_POST["form_permissions"]
   );
-  list ($g_success, $g_message, $field_map) = fb_duplicate_form($form_id, $settings);
+  list ($g_success, $g_message) = fb_duplicate_form($form_id, $settings);
 
   if ($g_success)
   {
     $new_form_id = $g_message;
 
     // if there are any Views specified, copy those over
-    $view_ids = isset($_POST["view_ids"]) ? $_POST["view_ids"] : array();
-    $view_map  = fb_duplicate_views($form_id, $new_form_id, $view_ids, $field_map, $settings);
+    $view_map  = fb_duplicate_views($form_id, $new_form_id, $_POST["view_ids"], $settings);
 
     // duplicate any emails
-    $email_ids = isset($_POST["email_ids"]) ? $_POST["email_ids"] : array();
-    fb_duplicate_email_templates($new_form_id, $email_ids, $view_map);
+    fb_duplicate_email_templates($new_form_id, $_POST["email_ids"], $view_map);
 
     $g_message = "The form has been created. <a href=\"../../admin/forms/edit.php?form_id=$new_form_id\">Click here</a> to edit the form.";
   }

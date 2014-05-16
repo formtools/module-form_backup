@@ -9,8 +9,8 @@ require_once("$folder/library.php");
 $request = array_merge($_POST, $_GET);
 if (!isset($request["form_id"]))
 {
-  header("location: index.php");
-  exit;
+    header("location: index.php");
+    exit;
 }
 $form_id = $_POST["form_id"];
 $form_info = ft_get_form($form_id);
