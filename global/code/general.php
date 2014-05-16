@@ -83,7 +83,6 @@ function fb_duplicate_form($form_id, $settings)
       VALUES ($vals_str)
         ");
 
-
     if (!$insert_query)
     {
       $error = mysql_error();
@@ -96,14 +95,35 @@ function fb_duplicate_form($form_id, $settings)
     }
   }
 
-  // now update any field_settings
   if (!empty($field_map))
   {
-    $original_field_ids = array_keys($field_map);
-    $field_ids = join(",", $original_field_ids);
-    $query = mysql_query("SELECT * FROM {$g_table_prefix}field_settings WHERE field_id IN ($field_ids)");
+  	$original_field_ids = array_keys($field_map);
+  	$field_ids = join(",", $original_field_ids);
 
-    // now duplicate all those rows
+    // copy over any field validation rules
+  	$query = mysql_query("SELECT * FROM {$g_table_prefix}field_validation WHERE field_id IN ($field_ids)");
+    while ($row = mysql_fetch_assoc($query))
+    {
+      $row["field_id"] = $field_map[$row["field_id"]];
+      $field_id = $row["field_id"];
+
+      list($cols_str, $vals_str) = fb_hash_split($row);
+
+      $insert_query = @mysql_query("
+        INSERT INTO {$g_table_prefix}field_validation ($cols_str)
+        VALUES ($vals_str)
+          ");
+
+      if (!$insert_query)
+      {
+        $error = mysql_error();
+        fb_rollback_form($new_form_id);
+        return array(false, "There was a problem inserting the new form's validation rules into the field_validation table. Please report this error in Form Tools forums: " . $error, "");
+      }
+    }
+
+    // now copy any field_settings
+    $query = mysql_query("SELECT * FROM {$g_table_prefix}field_settings WHERE field_id IN ($field_ids)");
     while ($row = mysql_fetch_assoc($query))
     {
       $row["field_id"] = $field_map[$row["field_id"]];
