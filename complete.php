@@ -26,7 +26,8 @@ if (isset($_POST["form_id"]))
     $new_form_id = $g_message;
 
     // if there are any Views specified, copy those over
-    $view_map  = fb_duplicate_views($form_id, $new_form_id, $_POST["view_ids"], $field_map, $settings);
+    $view_ids = isset($_POST["view_ids"]) ? $_POST["view_ids"] : array();
+    $view_map  = fb_duplicate_views($form_id, $new_form_id, $view_ids, $field_map, $settings);
 
     // duplicate any emails
     $email_ids = isset($_POST["email_ids"]) ? $_POST["email_ids"] : array();
