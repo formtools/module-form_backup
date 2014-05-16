@@ -174,7 +174,7 @@ function fb_duplicate_form($form_id, $settings)
     // now add the auto-increment, primary key
     @mysql_query("ALTER TABLE {$g_table_prefix}form_{$new_form_id} ADD PRIMARY KEY (submission_id)");
     @mysql_query("ALTER TABLE {$g_table_prefix}form_{$new_form_id} CHANGE submission_id submission_id MEDIUMINT(8) UNSIGNED NOT NULL AUTO_INCREMENT");
-    @mysql_query("ALTER TABLE {$g_table_prefix}form_{$new_form_id} TYPE=InnoDB DEFAULT CHARSET=utf8");
+    @mysql_query("ALTER TABLE {$g_table_prefix}form_{$new_form_id} TYPE=MyISAM DEFAULT CHARSET=utf8");
   }
 
   return array(true, $new_form_id, $field_map);
