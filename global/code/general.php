@@ -86,10 +86,6 @@ function fb_duplicate_form($form_id, $settings)
 
     if (!$insert_query)
     {
-echo "      INSERT INTO {$g_table_prefix}form_fields ($cols_str)
-      VALUES ($vals_str)
-";
-
       $error = mysql_error();
       fb_rollback_form($new_form_id);
       return array(false, "There was a problem inserting the new form's field info into the form_fields table. Please report this error in Form Tools forums: " . $error, "");
@@ -203,7 +199,7 @@ echo "      INSERT INTO {$g_table_prefix}form_fields ($cols_str)
   }
   else
   {
-    $result2 = mysql_query("CREATE TABLE {$g_table_prefix}form_{$new_form_id} LIKE {$g_table_prefix}form_{$form_id}");
+    $result = mysql_query("CREATE TABLE {$g_table_prefix}form_{$new_form_id} LIKE {$g_table_prefix}form_{$form_id}");
     if ($history_table_exists)
     {
       $result2 = mysql_query("CREATE TABLE {$g_table_prefix}form_{$new_form_id}_history LIKE {$g_table_prefix}form_{$form_id}_history");
@@ -221,7 +217,7 @@ echo "      INSERT INTO {$g_table_prefix}form_fields ($cols_str)
     // now add the auto-increment, primary key
     @mysql_query("ALTER TABLE {$g_table_prefix}form_{$new_form_id} ADD PRIMARY KEY (submission_id)");
     @mysql_query("ALTER TABLE {$g_table_prefix}form_{$new_form_id} CHANGE submission_id submission_id MEDIUMINT(8) UNSIGNED NOT NULL AUTO_INCREMENT");
-    @mysql_query("ALTER TABLE {$g_table_prefix}form_{$new_form_id} TYPE=MyISAM DEFAULT CHARSET=utf8");
+    @mysql_query("ALTER TABLE {$g_table_prefix}form_{$new_form_id} DEFAULT CHARSET=utf8");
   }
 
   return array(true, $new_form_id, $field_map);
@@ -321,7 +317,7 @@ function fb_duplicate_views($form_id, $new_form_id, $view_ids, $field_map, $sett
       }
       else
       {
-      	$new_group_id = mysql_insert_id();
+        $new_group_id = mysql_insert_id();
         $view_field_group_id_map[$old_group_id] = $new_group_id;
       }
     }
