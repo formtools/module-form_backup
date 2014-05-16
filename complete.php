@@ -29,7 +29,8 @@ if (isset($_POST["form_id"]))
     $view_map  = fb_duplicate_views($form_id, $new_form_id, $_POST["view_ids"], $field_map, $settings);
 
     // duplicate any emails
-    fb_duplicate_email_templates($new_form_id, $_POST["email_ids"], $view_map);
+    $email_ids = isset($_POST["email_ids"]) ? $_POST["email_ids"] : array();
+    fb_duplicate_email_templates($new_form_id, $email_ids, $view_map);
 
     $g_message = "The form has been created. <a href=\"../../admin/forms/edit.php?form_id=$new_form_id\">Click here</a> to edit the form.";
   }

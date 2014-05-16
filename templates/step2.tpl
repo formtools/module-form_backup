@@ -18,7 +18,7 @@
   </div>
 
   <form action="complete.php" method="post">
-    <input type="hidden" name="form_id" value="{$form_id}" /
+    <input type="hidden" name="form_id" value="{$form_id}" />
 
     <table cellpadding="0" cellspacing="0" width="100%" class="form_backup_table">
     <tr>
@@ -59,6 +59,9 @@
           <input type="checkbox" name="email_ids[]" value="{$email.email_id}" id="email_{$email.email_id}" checked />
             <label for="email_{$email.email_id}">{$email.email_template_name}</label><br />
         {/foreach}
+        {if $emails|@count == 0}
+          <span class="light_grey">No email templates defined</span>
+        {/if}
       </td>
     </tr>
     <tr>

@@ -4,8 +4,6 @@
 Form Tools - Module Language File
 ---------------------------------
 
-File created: Oct 24th, 2:46 AM
-
 If you would like to help translate this module, please visit:
 http://www.formtools.org/translations/
 */
@@ -14,7 +12,7 @@ $L = array();
 
 // required
 $L["module_name"] = "Form Backup";
-$L["module_description"] = "his module lets you backup an entire form, including individual components like Views, email templates and submission data. It's also handy for making copies of forms.";
+$L["module_description"] = "This module lets you backup an entire form, including individual components like Views, email templates and submission data. It's also handy for making copies of forms if you want multiple, similar forms without having to add each separately.";
 
 $L["word_help"] = "Help";
 $L["word_continue"] = "Continue &raquo;";
