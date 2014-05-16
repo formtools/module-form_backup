@@ -8,9 +8,9 @@
   </table>
 
   <div id="form_copier_nav">
-	<div><a href="index.php">{$L.phrase_select_form}</a></div>
-	<div>{$LANG.word_settings}</div>
-	<div>{$LANG.word_complete}</div>
+    <div><a href="index.php">{$L.phrase_select_form}</a></div>
+    <div>{$LANG.word_settings}</div>
+    <div>{$LANG.word_complete}</div>
   </div>
 
   {include file='messages.tpl'}
@@ -18,5 +18,5 @@
   <p>
     <input type="button" onclick="window.location='index.php'" value="{$L.phrase_backup_another_form}" />
   </p>
-  
+
 {include file='modules_footer.tpl'}

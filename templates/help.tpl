@@ -10,5 +10,5 @@
   <p>
     {$L.text_help_link}
   </p>
-	
+
 {include file='modules_footer.tpl'}

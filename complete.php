@@ -19,14 +19,14 @@ if (isset($_POST["form_id"]))
     "form_disabled"    => $form_disabled,
     "form_permissions" => $_POST["form_permissions"]
   );
-  list ($g_success, $g_message) = fb_duplicate_form($form_id, $settings);
+  list ($g_success, $g_message, $field_map) = fb_duplicate_form($form_id, $settings);
 
   if ($g_success)
   {
     $new_form_id = $g_message;
 
     // if there are any Views specified, copy those over
-    $view_map  = fb_duplicate_views($form_id, $new_form_id, $_POST["view_ids"], $settings);
+    $view_map  = fb_duplicate_views($form_id, $new_form_id, $_POST["view_ids"], $field_map, $settings);
 
     // duplicate any emails
     fb_duplicate_email_templates($new_form_id, $_POST["email_ids"], $view_map);

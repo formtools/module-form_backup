@@ -8,20 +8,20 @@
   </table>
 
   <div id="form_copier_nav">
-	<div>{$L.phrase_select_form}</div>
-	<div class="unselected">{$LANG.word_settings}</div>
-	<div class="unselected">{$LANG.word_complete}</div>
+    <div>{$L.phrase_select_form}</div>
+    <div class="unselected">{$LANG.word_settings}</div>
+    <div class="unselected">{$LANG.word_complete}</div>
   </div>
 
   <form action="step2.php" method="post">
-	
-	<table cellspacing="0" cellpadding="0" class="form_backup_table">
-	<tr>
-	  <td width="140">{$L.phrase_select_form}</td>
-	  <td>{forms_dropdown name_id="form_id"}</td>
-	</tr>
-	</table>
-	
+
+    <table cellspacing="0" cellpadding="0" class="form_backup_table">
+    <tr>
+      <td width="140">{$L.phrase_select_form}</td>
+      <td>{forms_dropdown name_id="form_id"}</td>
+    </tr>
+    </table>
+
     <p>
       <input type="submit" value="{$L.word_continue}" />
     </p>
