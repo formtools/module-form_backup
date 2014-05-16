@@ -472,8 +472,7 @@ function fb_duplicate_email_templates($new_form_id, $email_ids, $view_map)
   {
     $row["form_id"] = $new_form_id;
     $curr_email_id = $row["email_id"];
-    $row["view_mapping_view_id"] = $view_map[$row["view_mapping_view_id"]];
-    $row["limit_email_content_to_fields_in_view"] = $view_map[$row["limit_email_content_to_fields_in_view"]];
+    $row["limit_email_content_to_fields_in_view"] = isset($view_map[$row["limit_email_content_to_fields_in_view"]]) ? $view_map[$row["limit_email_content_to_fields_in_view"]] : "";
 
     unset($row["email_id"]);
     list($cols_str, $vals_str) = fb_hash_split($row);
@@ -488,7 +487,8 @@ function fb_duplicate_email_templates($new_form_id, $email_ids, $view_map)
       return array(false, "Sorry, there was a problem duplicating the email template information. Please report this error in the Form Tools forums: " . mysql_error());
     }
 
-    $email_id_map[$curr_email_id] = mysql_insert_id();
+    $new_email_id = mysql_insert_id();
+    $email_id_map[$curr_email_id] = $new_email_id;
 
     $query2 = mysql_query("SELECT * FROM {$g_table_prefix}email_template_recipients WHERE email_template_id = $curr_email_id");
     while ($row2 = mysql_fetch_assoc($query2))
@@ -508,7 +508,8 @@ function fb_duplicate_email_templates($new_form_id, $email_ids, $view_map)
       }
     }
 
-    // if a View Map has been supplied, duplicate any entries in the email_template_edit_submission_views table
+    // if a View Map has been supplied, duplicate any entries in the email_template_edit_submission_views and
+    // email_template_when_sent_views tables
     if (!empty($view_map))
     {
       while (list($original_view_id, $new_view_id) = each($view_map))
@@ -519,12 +520,24 @@ function fb_duplicate_email_templates($new_form_id, $email_ids, $view_map)
           WHERE  email_id = $curr_email_id AND
                  view_id = $original_view_id
             ");
-        $result = mysql_fetch_assoc($query2);
-        if ($result2["c"] == 1)
+        if (mysql_num_rows($query2) == 1)
         {
           @mysql_query("
             INSERT INTO {$g_table_prefix}email_template_edit_submission_views (email_id, view_id)
-            VALUES ($curr_email_id, $new_view_id)
+            VALUES ($new_email_id, $new_view_id)
+              ");
+        }
+        $query3 = mysql_query("
+          SELECT count(*) as c
+          FROM   {$g_table_prefix}email_template_when_sent_views
+          WHERE  email_id = $curr_email_id AND
+                 view_id = $original_view_id
+            ");
+        if (mysql_num_rows($query3) == 1)
+        {
+          @mysql_query("
+            INSERT INTO {$g_table_prefix}email_template_when_sent_views (email_id, view_id)
+            VALUES ($new_email_id, $new_view_id)
               ");
         }
       }
