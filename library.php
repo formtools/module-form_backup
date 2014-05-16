@@ -58,7 +58,28 @@ function fb_duplicate_form($form_id, $settings)
 
   $new_form_id = mysql_insert_id();
 
+
   // everything in this function from now on is rolled back pending a problem
+
+  // form email fields (missed in earlier versions, added in 1.0.4)
+  $query = mysql_query("SELECT * FROM {$g_table_prefix}form_email_fields WHERE form_id = $form_id");
+  while ($row = mysql_fetch_assoc($query))
+  {
+    $email_field      = $row["email_field"];
+    $first_name_field = $row["first_name_field"];
+    $last_name_field  = $row["last_name_field"];
+
+    $insert_query = @mysql_query("
+      INSERT INTO {$g_table_prefix}form_email_fields (form_id, email_field, first_name_field, last_name_field)
+      VALUES ($new_form_id, '$email_field', '$first_name_field', '$last_name_field')
+    ");
+    if (!$insert_query)
+    {
+      $error = mysql_error();
+      fb_rollback_form($new_form_id);
+      return array(false, "There was a problem inserting the new form's email field info into the form_email_fields table. Please report this error in Form Tools forums: " . $error, "");
+    }
+  }
 
   // copy over the field data
   $field_map = array(); // a hash of old_field_id => new_field_id
@@ -153,14 +174,34 @@ function fb_duplicate_form($form_id, $settings)
   }
 
 
+  // if a history table exists, created by the Submission History module, make a copy of that too
+  $query = mysql_query("SHOW TABLES");
+  $history_table_exists = false;
+  while ($row = mysql_fetch_array($query))
+  {
+    if ($row[0] == "{$g_table_prefix}form_{$form_id}_history")
+    {
+      $history_table_exists = true;
+      break;
+    }
+  }
+
   // create the actual form with or without the submission info
   if ($copy_submissions)
   {
     $result = mysql_query("CREATE TABLE {$g_table_prefix}form_{$new_form_id} SELECT * FROM {$g_table_prefix}form_{$form_id}");
+    if ($history_table_exists)
+    {
+      $result2 = mysql_query("CREATE TABLE {$g_table_prefix}form_{$new_form_id}_history SELECT * FROM {$g_table_prefix}form_{$form_id}_history");
+    }
   }
   else
   {
-    $result = mysql_query("CREATE TABLE {$g_table_prefix}form_{$new_form_id} LIKE {$g_table_prefix}form_{$form_id}");
+    $result2 = mysql_query("CREATE TABLE {$g_table_prefix}form_{$new_form_id} LIKE {$g_table_prefix}form_{$form_id}");
+    if ($history_table_exists)
+    {
+      $result2 = mysql_query("CREATE TABLE {$g_table_prefix}form_{$new_form_id}_history LIKE {$g_table_prefix}form_{$form_id}_history");
+    }
   }
 
   if (!$result)
@@ -247,6 +288,8 @@ function fb_duplicate_views($form_id, $new_form_id, $view_ids, $field_map, $sett
     while ($row2 = mysql_fetch_assoc($view_filters_query))
     {
       $row2["view_id"] = $view_map[$view_id];
+      $row2["field_id"] = $field_map[$row2["field_id"]];
+
       unset($row2["filter_id"]);
       list($cols_str, $vals_str) = fb_hash_split($row2);
 
@@ -404,5 +447,6 @@ function fb_rollback_form($form_id)
   global $g_table_prefix;
 
   @mysql_query("DELETE FROM {$g_table_prefix}forms WHERE form_id = $form_id");
+  @mysql_query("DELETE FROM {$g_table_prefix}form_email_fields WHERE form_id = $form_id");
   @mysql_query("DELETE FROM {$g_table_prefix}form_fields WHERE form_id = $form_id");
 }
