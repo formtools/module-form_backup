@@ -30,7 +30,7 @@ $L["phrase_show_create_backup_button"] = "Show \"Back up Form\" button on admini
 $L["phrase_back_up_form"] = "Back up form";
 
 $L["text_choose_settings"] = "Please choose those settings you would like to copy.";
-$L["text_help_link"] = "For help on how to use this module, please see the <a href=\"http://modules.formtools.org/form_backup/\">module help documentation</a>.";
+$L["text_help_link"] = "For help on how to use this module, please see the <a href=\"https://docs.formtools.org/modules/form_backup/\">module help documentation</a>.";
 $L["text_module_intro"] = "This module makes a backup of any form - copying over all the settings and data that you want. It can be very handy for forms that get re-used, or for archiving old form data.";
 
 $L["notify_settings_updated"] = "The settings have been updated.";

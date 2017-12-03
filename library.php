@@ -1,4 +1,4 @@
 <?php
 
-require_once(dirname(__FILE__) . "/global/code/general.php");
-require_once(dirname(__FILE__) . "/global/code/module.php");
+require_once(__DIR__ . "/code/General.class.php");
+require_once(__DIR__ . "/code/Module.class.php");
