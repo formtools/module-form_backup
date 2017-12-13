@@ -22,104 +22,114 @@ class General
         $form_permissions = $settings["form_permissions"];
 
         // everything in this function from now on is rolled back pending a problem
-        $field_map = self::addFormFieldsTableRecords($form_id, $new_form_id);
-        if (!empty($field_map)) {
-            self::addFormFieldValidationAndSettings($new_form_id, $field_map);
-        }
-        self::addFormEmailFields($form_id, $new_form_id, $field_map);
+        try {
+            $field_map = self::addFormFieldsTableRecords($form_id, $new_form_id);
 
-        // multi_page_form_urls
-        $db->query("SELECT * FROM {PREFIX}multi_page_form_urls WHERE form_id = :form_id");
-        $db->bind("form_id", $form_id);
-        $db->execute();
-        $fields = $db->fetchAll();
+            if (!empty($field_map)) {
+                self::addFormFieldValidationAndSettings($new_form_id, $field_map);
+            }
+            self::addFormEmailFields($form_id, $new_form_id, $field_map);
 
-        foreach ($fields as $row) {
-            $db->query("
-                INSERT INTO {PREFIX}multi_page_form_urls (form_id, form_url, page_num)
-                VALUES (:form_id, :form_url, :page_num)
-            ");
-            $db->bindAll(array(
-                "form_id" => $new_form_id,
-                "form_url" => $row["form_url"],
-                "page_num" => $row["page_num"]
-            ));
-            $db->execute();
-        }
-
-        // client_forms
-        if ($form_permissions == "same_permissions") {
-            $db->query("SELECT account_id FROM {PREFIX}client_forms WHERE form_id = :form_id");
+            // multi_page_form_urls
+            $db->query("SELECT * FROM {PREFIX}multi_page_form_urls WHERE form_id = :form_id");
             $db->bind("form_id", $form_id);
             $db->execute();
             $fields = $db->fetchAll();
 
             foreach ($fields as $row) {
                 $db->query("
-                    INSERT INTO {PREFIX}client_forms (account_id, form_id)
-                    VALUES (:account_id, :form_id)
+                    INSERT INTO {PREFIX}multi_page_form_urls (form_id, form_url, page_num)
+                    VALUES (:form_id, :form_url, :page_num)
                 ");
                 $db->bindAll(array(
-                    "account_id" => $row["account_id"],
-                    "form_id" => $new_form_id
+                    "form_id" => $new_form_id,
+                    "form_url" => $row["form_url"],
+                    "page_num" => $row["page_num"]
                 ));
                 $db->execute();
             }
 
-            // ft_public_form_omit_list
-            $db->query("SELECT account_id FROM {PREFIX}public_form_omit_list WHERE form_id = :form_id");
-            $db->bind("form_id", $form_id);
+            // client_forms
+            if ($form_permissions == "same_permissions") {
+                $db->query("SELECT account_id FROM {PREFIX}client_forms WHERE form_id = :form_id");
+                $db->bind("form_id", $form_id);
+                $db->execute();
+                $fields = $db->fetchAll();
+
+                foreach ($fields as $row) {
+                    $db->query("
+                        INSERT INTO {PREFIX}client_forms (account_id, form_id)
+                        VALUES (:account_id, :form_id)
+                    ");
+                    $db->bindAll(array(
+                        "account_id" => $row["account_id"],
+                        "form_id" => $new_form_id
+                    ));
+                    $db->execute();
+                }
+
+                // ft_public_form_omit_list
+                $db->query("SELECT account_id FROM {PREFIX}public_form_omit_list WHERE form_id = :form_id");
+                $db->bind("form_id", $form_id);
+                $db->execute();
+                $fields = $db->fetchAll();
+
+                foreach ($fields as $row) {
+                    $db->query("
+                        INSERT INTO {PREFIX}public_form_omit_list (account_id, form_id)
+                        VALUES (:account_id, :form_id)
+                    ");
+                    $db->bindAll(array(
+                        "account_id" => $row["account_id"],
+                        "form_id" => $new_form_id
+                    ));
+                    $db->execute();
+                }
+            }
+
+            // if a history table exists, created by the Submission History module, make a copy of that too
+            $db->query("SHOW TABLES");
             $db->execute();
-            $fields = $db->fetchAll();
 
-            foreach ($fields as $row) {
-                $db->query("
-                    INSERT INTO {PREFIX}public_form_omit_list (account_id, form_id)
-                    VALUES (:account_id, :form_id)
-                ");
-                $db->bindAll(array(
-                    "account_id" => $row["account_id"],
-                    "form_id" => $new_form_id
-                ));
+            $history_table_exists = false;
+            foreach ($db->fetchAll(PDO::FETCH_COLUMN) as $table_name) {
+                if ($table_name == "{PREFIX}form_{$form_id}_history") {
+                    $history_table_exists = true;
+                    break;
+                }
+            }
+
+            // create the actual form with or without the submission info
+            if ($copy_submissions) {
+                $db->query("CREATE TABLE {PREFIX}form_{$new_form_id} SELECT * FROM {PREFIX}form_{$form_id}");
                 $db->execute();
+                if ($history_table_exists) {
+                    $db->query("CREATE TABLE {PREFIX}form_{$new_form_id}_history SELECT * FROM {PREFIX}form_{$form_id}_history");
+                    $db->execute();
+                }
+            } else {
+                $db->query("CREATE TABLE {PREFIX}form_{$new_form_id} LIKE {PREFIX}form_{$form_id}");
+                $db->execute();
+                if ($history_table_exists) {
+                    $db->query("CREATE TABLE {PREFIX}form_{$new_form_id}_history LIKE {PREFIX}form_{$form_id}_history");
+                    $db->execute();
+                }
             }
-        }
 
-        // if a history table exists, created by the Submission History module, make a copy of that too
-        $db->query("SHOW TABLES");
-        $db->execute();
-
-        $history_table_exists = false;
-        foreach ($db->fetchAll(PDO::FETCH_COLUMN) as $table_name) {
-            if ($table_name == "{PREFIX}form_{$form_id}_history") {
-                $history_table_exists = true;
-                break;
-            }
-        }
-
-        // create the actual form with or without the submission info
-        if ($copy_submissions) {
-            $result = mysql_query("CREATE TABLE {PREFIX}form_{$new_form_id} SELECT * FROM {PREFIX}form_{$form_id}");
-            if ($history_table_exists) {
-                $result2 = mysql_query("CREATE TABLE {PREFIX}form_{$new_form_id}_history SELECT * FROM {PREFIX}form_{$form_id}_history");
-            }
-        } else {
-            $result = mysql_query("CREATE TABLE {PREFIX}form_{$new_form_id} LIKE {PREFIX}form_{$form_id}");
-            if ($history_table_exists) {
-                $result2 = mysql_query("CREATE TABLE {PREFIX}form_{$new_form_id}_history LIKE {PREFIX}form_{$form_id}_history");
-            }
-        }
-
-        if (!$result) {
-            $error = mysql_error();
+        } catch (Exception $e) {
             self::rollbackForm($new_form_id);
-            return array(false, "There was a problem creating the new table. Please report this error in Form Tools forums: " . $error, "");
-        } else {
-            // now add the auto-increment, primary key
-            @mysql_query("ALTER TABLE {PREFIX}form_{$new_form_id} ADD PRIMARY KEY (submission_id)");
-            @mysql_query("ALTER TABLE {PREFIX}form_{$new_form_id} CHANGE submission_id submission_id MEDIUMINT(8) UNSIGNED NOT NULL AUTO_INCREMENT");
-            @mysql_query("ALTER TABLE {PREFIX}form_{$new_form_id} DEFAULT CHARSET=utf8");
+            return array(false, "There was a problem creating the new table. Please report this error in Form Tools forums: " . $e->getMessage(), "");
         }
+
+        // now add the auto-increment, primary key
+//        $db->query("ALTER TABLE {PREFIX}form_{$new_form_id} ADD PRIMARY KEY (submission_id)");
+//        $db->execute();
+
+//        $db->query("ALTER TABLE {PREFIX}form_{$new_form_id} CHANGE submission_id submission_id MEDIUMINT(8) UNSIGNED NOT NULL AUTO_INCREMENT");
+//        $db->execute();
+
+        $db->query("ALTER TABLE {PREFIX}form_{$new_form_id} DEFAULT CHARSET=utf8");
+        $db->execute();
 
         return array(true, $new_form_id, $field_map);
     }
@@ -130,39 +140,50 @@ class General
      */
     public static function duplicateViews($form_id, $new_form_id, $view_ids, $field_map, $settings)
     {
-        global $g_table_prefix;
+        $db = Core::$db;
 
-        if (empty($view_ids))
+        if (empty($view_ids)) {
             return array();
+        }
 
         // View groups for the form
-        $query = mysql_query("SELECT * FROM {PREFIX}list_groups WHERE group_type = 'form_{$form_id}_view_group'");
+        $db->query("SELECT * FROM {PREFIX}list_groups WHERE group_type = :group_type");
+        $db->bind("group_type", "form_{$form_id}_view_group");
+        $db->execute();
+        $groups = $db->fetchAll();
+
         $new_group_type = "form_{$new_form_id}_view_group";
         $view_group_id_map = array();
-        while ($row = mysql_fetch_assoc($query)) {
-            $group_name  = ft_sanitize($row["group_name"]);
-            $custom_data = ft_sanitize($row["custom_data"]);
-            $list_order = $row["list_order"];
+        foreach ($groups as $row) {
             $old_group_id = $row["group_id"];
 
-            $result = mysql_query("
-                INSERT INTO {PREFIX}list_groups (group_type, group_name, custom_data, list_order)
-                VALUES ('$new_group_type', '$group_name', '$custom_data', $list_order)
-            ");
-
-            if (!$result) {
-                return array(false, "Sorry, there was a problem duplicating the View group information. Please report this error in the Form Tools forums: " . mysql_error());
-            } else {
-                $view_group_id_map[$old_group_id] = mysql_insert_id();
+            try {
+                $db->query("
+                    INSERT INTO {PREFIX}list_groups (group_type, group_name, custom_data, list_order)
+                    VALUES (:group_type, :group_name, :custom_data, :list_order)
+                ");
+                $db->bindAll(array(
+                    "group_type" => $new_group_type,
+                    "group_name" => $row["group_name"],
+                    "custom_data" => $row["custom_data"],
+                    "list_order" => $row["list_order"]
+                ));
+                $db->execute();
+            } catch (Exception $e) {
+                return array(false, "Sorry, there was a problem duplicating the View group information. Please report this error in the Form Tools forums: " . $e->getMessage());
             }
+
+            $view_group_id_map[$old_group_id] = $db->getInsertId();
         }
 
         $view_ids_str = join(",", $view_ids);
-        $query = mysql_query("SELECT * FROM {PREFIX}views WHERE view_id IN ($view_ids_str)");
+        $db->query("SELECT * FROM {PREFIX}views WHERE view_id IN ($view_ids_str)");
+        $db->execute();
+        $views = $db->fetchAll();
 
         // views table
         $view_map = array();
-        while ($row = mysql_fetch_assoc($query)) {
+        foreach ($views as $row) {
             $view_id = $row["view_id"];
             $row["form_id"] = $new_form_id;
             $old_group_id = $row["group_id"];
@@ -173,155 +194,60 @@ class General
                 $row["access_type"] = "admin";
             }
 
-            list($cols_str, $vals_str) = fb_hash_split($row);
-
-            $result = mysql_query("
-                INSERT INTO {PREFIX}views ($cols_str)
-                VALUES ($vals_str)
-            ");
-
-            if (!$result) {
-                return array(false, "Sorry, there was a problem duplicating a View. Please report this error in the Form Tools forums: " . mysql_error());
+            list ($cols_str, $placeholders) = self::getInsertStatementParams($row);
+            try {
+                $db->query("
+                    INSERT INTO {PREFIX}views ($cols_str)
+                    VALUES ($placeholders)
+                ");
+                $db->bindAll($row);
+                $db->execute();
+            } catch (Exception $e) {
+                return array(false, "Sorry, there was a problem duplicating a View. Please report this error in the Form Tools forums: " . $e->getMessage());
             }
 
-            $new_view_id = mysql_insert_id();
+            $new_view_id = $db->getInsertId();
             $view_map[$view_id] = $new_view_id;
 
+            $view_field_group_id_map = self::copyViewFieldGroups($view_id, $new_view_id);
 
-            // view field groups
-            $view_field_group_id_map = array();
-            $view_field_group_query = mysql_query("SELECT * FROM {PREFIX}list_groups WHERE group_type = 'view_fields_$view_id'");
-            $new_group_type = "view_fields_{$new_view_id}";
-            while ($row2 = mysql_fetch_assoc($view_field_group_query)) {
-                $group_name   = ft_sanitize($row2["group_name"]);
-                $custom_data  = ft_sanitize($row2["custom_data"]);
-                $list_order   = $row2["list_order"];
-                $old_group_id = $row2["group_id"];
+            self::copyViewFields($view_id, $view_map, $view_field_group_id_map, $field_map);
+            self::copyViewColumns($view_id, $view_map, $field_map);
+            self::copyViewFilters($view_id, $view_map, $field_map);
+            self::copyViewTabs($view_id, $view_map);
+            self::copyNewViewSubmissionDefaults($view_id, $new_view_id, $field_map);
 
-                $result = mysql_query("
-                    INSERT INTO {PREFIX}list_groups (group_type, group_name, custom_data, list_order)
-                    VALUES ('$new_group_type', '$group_name', '$custom_data', $list_order)
-                ");
-
-                if (!$result) {
-                    return array(false, "Sorry, there was a problem duplicating the View field group information. Please report this error in the Form Tools forums: " . mysql_error());
-                } else {
-                    $new_group_id = mysql_insert_id();
-                    $view_field_group_id_map[$old_group_id] = $new_group_id;
-                }
-            }
-
-            // view_fields
-            $view_fields_query = mysql_query("SELECT * FROM {PREFIX}view_fields WHERE view_id = $view_id");
-            while ($row2 = mysql_fetch_assoc($view_fields_query)) {
-                $row2["view_id"]  = $view_map[$view_id];
-                $old_group_id = $row2["group_id"];
-                $row2["group_id"] = $view_field_group_id_map[$old_group_id];
-
-                $old_field_id = $row2["field_id"];
-
-                // not strictly necessary, since it should never happen. But just in case some data got orphaned
-                if (!array_key_exists($old_field_id, $field_map)) {
-                    continue;
-                }
-
-                $row2["field_id"] = $field_map[$old_field_id];
-                list($cols_str, $vals_str) = fb_hash_split($row2);
-
-                $result = mysql_query("
-                    INSERT INTO {PREFIX}view_fields ($cols_str)
-                    VALUES ($vals_str)
-                ");
-
-                if (!$result) {
-                    return array(false, "Sorry, there was a problem duplicating the View fields information. Please report this error in the Form Tools forums: " . mysql_error());
-                }
-            }
-
-
-            // view columns
-            $view_cols_query = mysql_query("SELECT * FROM {PREFIX}view_columns WHERE view_id = $view_id");
-            while ($row2 = mysql_fetch_assoc($view_cols_query)) {
-                $row2["view_id"]  = $view_map[$view_id];
-                $row2["field_id"] = $field_map[$row2["field_id"]];
-                list($cols_str, $vals_str) = fb_hash_split($row2);
-
-                $result = mysql_query("
-                    INSERT INTO {PREFIX}view_columns ($cols_str)
-                    VALUES ($vals_str)
-                ");
-
-                if (!$result) {
-                    return array(false, "Sorry, there was a problem duplicating the View fields information. Please report this error in the Form Tools forums: " . mysql_error());
-                }
-            }
-
-
-            // view_filters
-            $view_filters_query = mysql_query("SELECT * FROM {PREFIX}view_filters WHERE view_id = $view_id");
-            while ($row2 = mysql_fetch_assoc($view_filters_query)) {
-                $row2["view_id"] = $view_map[$view_id];
-                $row2["field_id"] = $field_map[$row2["field_id"]];
-
-                unset($row2["filter_id"]);
-                list($cols_str, $vals_str) = fb_hash_split($row2);
-
-                $result = mysql_query("
-                    INSERT INTO {PREFIX}view_filters ($cols_str)
-                    VALUES ($vals_str)
-                ") or die(mysql_error());
-
-                if (!$result) {
-                    return array(false, "Sorry, there was a problem duplicating the View filter information. Please report this error in the Form Tools forums: " . mysql_error());
-                }
-            }
-
-            // view_tabs
-            $view_tabs_query = mysql_query("SELECT * FROM {PREFIX}view_tabs WHERE view_id = $view_id");
-            while ($row2 = mysql_fetch_assoc($view_tabs_query)) {
-                $row2["view_id"] = $view_map[$view_id];
-                list($cols_str, $vals_str) = fb_hash_split($row2);
-
-                $result = mysql_query("
-                    INSERT INTO {PREFIX}view_tabs ($cols_str)
-                    VALUES ($vals_str)
-                ");
-
-                if (!$result) {
-                    return array(false, "Sorry, there was a problem duplicating the View tab information. Please report this error in the Form Tools forums: " . mysql_error());
-                }
-            }
-
-            // new_view_submission_defaults
-            $new_view_defaults_query = mysql_query("SELECT * FROM {PREFIX}new_view_submission_defaults WHERE view_id = $view_id");
-            while ($row2 = mysql_fetch_assoc($new_view_defaults_query)) {
-                $new_field_id = $field_map[$row2["field_id"]];
-                $default_value = ft_sanitize($row2["default_value"]);
-                $list_order = $row2["list_order"];
-
-                $result = mysql_query("
-                    INSERT INTO {PREFIX}new_view_submission_defaults (view_id, field_id, default_value, list_order)
-                    VALUES ($new_view_id, $new_field_id, '$default_value', $list_order)
-                ");
-
-                if (!$result) {
-                    return array(false, "Sorry, there was a problem duplicating the new View submission default information. Please report this error in the Form Tools forums: " . mysql_error());
-                }
-            }
-
-            // if the user is also copying over the form permissions, duplicate the relevant entries in client_views and public_view_omit_list
+            // if the user is also copying over the form permissions, duplicate the relevant entries in client_views
+            // and public_view_omit_list
             if ($settings["form_permissions"] == "same_permissions") {
-                $result = mysql_query("SELECT account_id FROM {PREFIX}client_views WHERE view_id = $view_id");
-                while ($row2 = mysql_fetch_array($result)) {
-                    $account_id = $row2["account_id"];
-                    mysql_query("INSERT INTO {PREFIX}client_views (account_id, view_id) VALUES ($account_id, $new_view_id)");
+
+                $db->query("SELECT account_id FROM {PREFIX}client_views WHERE view_id = :view_id");
+                $db->bind("view_id", $view_id);
+                $db->execute();
+                $account_ids = $db->fetchAll(PDO::FETCH_COLUMN);
+
+                foreach ($account_ids as $account_id) {
+                    $db->query("INSERT INTO {PREFIX}client_views (account_id, view_id) VALUES (:account_id, :view_id)");
+                    $db->bindAll(array(
+                        "account_id" => $account_id,
+                        "view_id" => $new_view_id
+                    ));
+                    $db->execute();
                 }
 
                 // public_view_omit_list
-                $result = mysql_query("SELECT account_id FROM {PREFIX}public_view_omit_list WHERE view_id = $view_id");
-                while ($row = mysql_fetch_array($result)) {
-                    $account_id = $row2["account_id"];
-                    mysql_query("INSERT INTO {PREFIX}public_view_omit_list (account_id, view_id) VALUES ($account_id, $new_view_id)");
+                $db->query("SELECT account_id FROM {PREFIX}public_view_omit_list WHERE view_id = :view_id");
+                $db->bind("view_id", $view_id);
+                $db->execute();
+                $account_ids = $db->fetchAll(PDO::FETCH_COLUMN);
+
+                foreach ($account_ids as $account_id) {
+                    $db->query("INSERT INTO {PREFIX}public_view_omit_list (account_id, view_id) VALUES (:account_id, :view_id)");
+                    $db->bindAll(array(
+                        "account_id" => $account_id,
+                        "view_id" => $new_view_id
+                    ));
+                    $db->execute();
                 }
             }
         }
@@ -335,77 +261,113 @@ class General
      */
     public static function duplicateEmailTemplates($new_form_id, $email_ids, $view_map)
     {
+        $db = Core::$db;
+
         if (empty($email_ids)) {
             return array();
         }
 
         $email_id_str = join(", ", $email_ids);
-        $query = mysql_query("SELECT * FROM {PREFIX}email_templates WHERE email_id IN ($email_id_str)");
+        $db->query("SELECT * FROM {PREFIX}email_templates WHERE email_id IN ($email_id_str)");
+        $db->execute();
+        $rows = $db->fetchAll();
 
         $email_id_map = array();
-        while ($row = mysql_fetch_assoc($query)) {
-            $row["form_id"] = $new_form_id;
+        foreach ($rows as $row) {
             $curr_email_id = $row["email_id"];
+
+            $row["form_id"] = $new_form_id;
             $row["limit_email_content_to_fields_in_view"] = isset($view_map[$row["limit_email_content_to_fields_in_view"]]) ? $view_map[$row["limit_email_content_to_fields_in_view"]] : "";
-
             unset($row["email_id"]);
-            list($cols_str, $vals_str) = fb_hash_split($row);
 
-            $result = mysql_query("
-                INSERT INTO {PREFIX}email_templates ($cols_str)
-                VALUES ($vals_str)
-            ");
+            list($cols_str, $placeholders) = self::getInsertStatementParams($row);
 
-            if (!$result) {
-                return array(false, "Sorry, there was a problem duplicating the email template information. Please report this error in the Form Tools forums: " . mysql_error());
+            try {
+                $db->query("
+                    INSERT INTO {PREFIX}email_templates ($cols_str)
+                    VALUES ($placeholders)
+                ");
+                $db->bindAll($row);
+                $db->execute();
+            } catch (Exception $e) {
+                return array(false, "Sorry, there was a problem duplicating the email template information. Please report this error in the Form Tools forums: " . $e->getMessage());
             }
 
-            $new_email_id = mysql_insert_id();
+            $new_email_id = $db->getInsertId();
             $email_id_map[$curr_email_id] = $new_email_id;
 
-            $query2 = mysql_query("SELECT * FROM {PREFIX}email_template_recipients WHERE email_template_id = $curr_email_id");
-            while ($row2 = mysql_fetch_assoc($query2)) {
+            $db->query("SELECT * FROM {PREFIX}email_template_recipients WHERE email_template_id = :email_template_id");
+            $db->bind("email_template_id", $curr_email_id);
+            $db->execute();
+            $rows = $db->fetchAll();
+
+            foreach ($rows as $row2) {
                 $row2["email_template_id"] = $email_id_map[$curr_email_id];
                 unset($row2["recipient_id"]);
 
-                list($cols_str, $vals_str) = fb_hash_split($row2);
-                $result = mysql_query("
-                    INSERT INTO {PREFIX}email_template_recipients ($cols_str)
-                    VALUES ($vals_str)
-                ");
-
-                if (!$result) {
-                    return array(false, "Sorry, there was a problem duplicating the email template recipient information. Please report this error in the Form Tools forums: " . mysql_error());
+                list($cols_str, $placeholders) = self::getInsertStatementParams($row2);
+                try {
+                    $db->query("
+                        INSERT INTO {PREFIX}email_template_recipients ($cols_str)
+                        VALUES ($placeholders)
+                    ");
+                    $db->bindAll($row2);
+                    $db->execute();
+                } catch (Exception $e) {
+                    return array(false, "Sorry, there was a problem duplicating the email template recipient information. Please report this error in the Form Tools forums: " . $e->getMessage());
                 }
             }
 
             // if a View Map has been supplied, duplicate any entries in the email_template_edit_submission_views and
             // email_template_when_sent_views tables
             if (!empty($view_map)) {
-                while (list($original_view_id, $new_view_id) = each($view_map)) {
-                    $query2 = mysql_query("
-                        SELECT count(*) as c
+                foreach ($view_map as $original_view_id => $new_view_id) {
+                    $db->query("
+                        SELECT count(*)
                         FROM   {PREFIX}email_template_edit_submission_views
-                        WHERE  email_id = $curr_email_id AND
-                               view_id = $original_view_id
+                        WHERE  email_id = :email_id AND
+                               view_id = :view_id
                     ");
-                    if (mysql_num_rows($query2) == 1) {
-                        @mysql_query("
+                    $db->bindAll(array(
+                        "email_id" => $curr_email_id,
+                        "view_id" => $original_view_id
+                    ));
+                    $db->execute();
+
+                    if ($db->numRows() === 1) {
+                        $db->query("
                             INSERT INTO {PREFIX}email_template_edit_submission_views (email_id, view_id)
-                            VALUES ($new_email_id, $new_view_id)
+                            VALUES (:email_id, :view_id)
                         ");
+                        $db->bindAll(array(
+                            "email_id" => $new_email_id,
+                            "view_id" => $new_view_id
+                        ));
+                        $db->execute();
                     }
-                    $query3 = mysql_query("
-                        SELECT count(*) as c
+
+                    $db->query("
+                        SELECT count(*)
                         FROM   {PREFIX}email_template_when_sent_views
-                        WHERE  email_id = $curr_email_id AND
-                               view_id = $original_view_id
+                        WHERE  email_id = :email_id AND
+                               view_id = :view_id
                     ");
-                    if (mysql_num_rows($query3) == 1) {
-                        @mysql_query("
+                    $db->bindAll(array(
+                        "email_id" => $curr_email_id,
+                        "view_id" => $original_view_id
+                    ));
+                    $db->execute();
+
+                    if ($db->numRows() === 1) {
+                        $db->query("
                             INSERT INTO {PREFIX}email_template_when_sent_views (email_id, view_id)
-                            VALUES ($new_email_id, $new_view_id)
+                            VALUES (:email_id, :view_id)
                         ");
+                        $db->bindAll(array(
+                            "email_id" => $new_email_id,
+                            "view_id" => $new_view_id
+                        ));
+                        $db->execute();
                     }
                 }
             }
@@ -413,21 +375,24 @@ class General
     }
 
 
-//    public static function fb_hash_split($row)
-//    {
-//        $cols   = array();
-//        $values = array();
-//        while (list($key, $value) = each($row))
-//        {
-//            $cols[]   = $key;
-//            $values[] = "'" . ft_sanitize($value) . "'";
-//        }
-//
-//        $cols_str = join(", ", $cols);
-//        $vals_str = join(", ", $values);
-//
-//        return array($cols_str, $vals_str);
-//    }
+    /**
+     * @param $hash array of columns => values
+     * @return array
+     */
+    public static function getInsertStatementParams($hash)
+    {
+        $col_names = array();
+        $placeholders = array();
+        foreach ($hash as $col_name => $value) {
+            $col_names[] = $col_name;
+            $placeholders[] = ":{$col_name}";
+        }
+
+        $cols_str = join(", ", $col_names);
+        $placeholders = join(", ", $placeholders);
+
+        return array($cols_str, $placeholders);
+    }
 
 
     public static function rollbackForm($form_id)
@@ -469,22 +434,14 @@ class General
 
         unset($form_data["form_id"]);
         $form_data["form_name"] = $new_form_name;
-        $form_data["is_active"] = ($form_disabled == "yes") ? "no" : "yes"; // invert!
+        $form_data["is_active"] = ($form_disabled == "yes") ? "no" : "yes";
 
         // if the user wanted to set the permissions as admin only, do it!
         if ($form_permissions == "admin") {
             $form_data["access_type"] = "admin";
         }
 
-        $col_names = array();
-        $placeholders = array();
-        foreach ($form_data as $col_name => $value) {
-            $col_names[] = $col_name;
-            $placeholders[] = ":{$col_name}";
-        }
-
-        $cols_str = join(", ", $col_names);
-        $placeholders = join(", ", $placeholders);
+        list($cols_str, $placeholders) = self::getInsertStatementParams($form_data);
 
         try {
             $db->query("
@@ -658,6 +615,196 @@ class General
                 $error = $e->getMessage();
                 self::rollbackForm($new_form_id);
                 return array(false, "There was a problem inserting the new form's email field info into the form_email_fields table. Please report this error in Form Tools forums: " . $error, "");
+            }
+        }
+    }
+
+
+    private static function copyViewFieldGroups($view_id, $new_view_id)
+    {
+        $db = Core::$db;
+        $db->query("SELECT * FROM {PREFIX}list_groups WHERE group_type = :group_type");
+        $db->bind("group_type", "view_fields_$view_id");
+        $db->execute();
+        $groups = $db->fetchAll();
+
+        $view_field_group_id_map = array();
+        foreach ($groups as $row) {
+            $old_group_id = $row["group_id"];
+
+            try {
+                $db->query("
+                    INSERT INTO {PREFIX}list_groups (group_type, group_name, custom_data, list_order)
+                    VALUES (:group_type, :group_name, :custom_data, :list_order)
+                ");
+                $db->bindAll(array(
+                    "group_type" => "view_fields_{$new_view_id}",
+                    "group_name" => $row["group_name"],
+                    "custom_data" => $row["custom_data"],
+                    "list_order" => $row["list_order"]
+                ));
+                $db->execute();
+            } catch (Exception $e) {
+                return array(false, "Sorry, there was a problem duplicating the View field group information. Please report this error in the Form Tools forums: " . mysql_error());
+            }
+
+            $view_field_group_id_map[$old_group_id] = $db->getInsertId();
+        }
+
+        return $view_field_group_id_map;
+    }
+
+
+    private static function copyViewFields($view_id, $view_map, $view_field_group_id_map, $field_map)
+    {
+        $db = Core::$db;
+        $db->query("SELECT * FROM {PREFIX}view_fields WHERE view_id = :view_id");
+        $db->bind("view_id", $view_id);
+        $db->execute();
+        $view_fields = $db->fetchAll();
+
+        foreach ($view_fields as $row) {
+            $old_group_id = $row["group_id"];
+            $old_field_id = $row["field_id"];
+
+            // This should never happen. But just in case some data got orphaned let's be safe
+            if (!array_key_exists($old_field_id, $field_map)) {
+                continue;
+            }
+
+            // overwrite the unique values in the old data row for the new View
+            $row["view_id"] = $view_map[$view_id];
+            $row["group_id"] = $view_field_group_id_map[$old_group_id];
+            $row["field_id"] = $field_map[$old_field_id];
+
+            list($cols_str, $placeholders) = self::getInsertStatementParams($row);
+
+            try {
+                $db->query("
+                    INSERT INTO {PREFIX}view_fields ($cols_str)
+                    VALUES ($placeholders)
+                ");
+                $db->bindAll($row);
+                $db->execute();
+            } catch (Exception $e) {
+                return array(false, "Sorry, there was a problem duplicating the View fields information. Please report this error in the Form Tools forums: " . $e->getMessage());
+            }
+        }
+    }
+
+
+    private static function copyViewColumns($view_id, $view_map, $field_map)
+    {
+        $db = Core::$db;
+
+        $db->query("SELECT * FROM {PREFIX}view_columns WHERE view_id = :view_id");
+        $db->bind("view_id", $view_id);
+        $db->execute();
+        $columns = $db->fetchAll();
+
+        foreach ($columns as $column) {
+            $column["view_id"]  = $view_map[$view_id];
+            $column["field_id"] = $field_map[$column["field_id"]];
+
+            list($cols_str, $placeholders) = self::getInsertStatementParams($column);
+
+            try {
+                $db->query("
+                    INSERT INTO {PREFIX}view_columns ($cols_str)
+                    VALUES ($placeholders)
+                ");
+                $db->bindAll($column);
+                $db->execute();
+            } catch (Exception $e) {
+                return array(false, "Sorry, there was a problem duplicating the View fields information. Please report this error in the Form Tools forums: " . $e->getMessage());
+            }
+        }
+    }
+
+
+    private static function copyViewFilters($view_id, $view_map, $field_map)
+    {
+        $db = Core::$db;
+
+        $db->query("SELECT * FROM {PREFIX}view_filters WHERE view_id = :view_id");
+        $db->bind("view_id", $view_id);
+        $db->execute();
+        $filters = $db->fetchAll();
+
+        foreach ($filters as $filter) {
+            $filter["view_id"] = $view_map[$view_id];
+            $filter["field_id"] = $field_map[$filter["field_id"]];
+
+            unset($filter["filter_id"]);
+            list($cols_str, $placeholders) = self::getInsertStatementParams($filter);
+
+            try {
+                $db->query("
+                    INSERT INTO {PREFIX}view_filters ($cols_str)
+                    VALUES ($placeholders)
+                ");
+                $db->bindAll($filter);
+                $db->execute();
+            } catch (Exception $e) {
+                return array(false, "Sorry, there was a problem duplicating the View filter information. Please report this error in the Form Tools forums: " . $e->getMessage());
+            }
+        }
+    }
+
+
+    private static function copyViewTabs($view_id, $view_map)
+    {
+        $db = Core::$db;
+
+        $db->query("SELECT * FROM {PREFIX}view_tabs WHERE view_id = :view_id");
+        $db->bind("view_id", $view_id);
+        $db->execute();
+        $tabs = $db->fetchAll();
+
+        foreach ($tabs as $tab) {
+            $tab["view_id"] = $view_map[$view_id];
+            list($cols_str, $vals_str) = self::getInsertStatementParams($tab);
+
+            try {
+                $db->query("
+                    INSERT INTO {PREFIX}view_tabs ($cols_str)
+                    VALUES ($vals_str)
+                ");
+                $db->bindAll($tab);
+                $db->execute();
+            } catch (Exception $e) {
+                return array(false, "Sorry, there was a problem duplicating the View tab information. Please report this error in the Form Tools forums: " . $e->getMessage());
+            }
+        }
+    }
+
+
+    private static function copyNewViewSubmissionDefaults($view_id, $new_view_id, $field_map)
+    {
+        $db = Core::$db;
+
+        $db->query("SELECT * FROM {PREFIX}new_view_submission_defaults WHERE view_id = :view_id");
+        $db->bind("view_id", $view_id);
+        $db->execute();
+        $rows = $db->fetchAll();
+
+        foreach ($rows as $row) {
+            $new_field_id = $field_map[$row["field_id"]];
+
+            try {
+                $db->query("
+                    INSERT INTO {PREFIX}new_view_submission_defaults (view_id, field_id, default_value, list_order)
+                    VALUES (:view_id, :field_id, :default_value, :list_order)
+                ");
+                $db->bindAll(array(
+                    "view_id" => $new_view_id,
+                    "field_id" => $new_field_id,
+                    "default_value" => $row["default_value"],
+                    "list_order" => $row["list_order"]
+                ));
+                $db->execute();
+            } catch (Exception $e) {
+                return array(false, "Sorry, there was a problem duplicating the new View submission default information. Please report this error in the Form Tools forums: " . $e->getMessage());
             }
         }
     }

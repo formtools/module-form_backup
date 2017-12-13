@@ -29,6 +29,7 @@ if (isset($_POST["form_id"])) {
 
         // if there are any Views specified, copy those over
         $view_ids = isset($_POST["view_ids"]) ? $_POST["view_ids"] : array();
+
         $view_map = General::duplicateViews($form_id, $new_form_id, $view_ids, $field_map, $settings);
 
         // duplicate any emails
