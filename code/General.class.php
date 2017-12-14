@@ -99,19 +99,22 @@ class General
                 }
             }
 
+            // this copies the table + indexes
+            $db->query("CREATE TABLE {PREFIX}form_{$new_form_id} LIKE {PREFIX}form_{$form_id}");
+            $db->execute();
+
             // create the actual form with or without the submission info
             if ($copy_submissions) {
-                $db->query("CREATE TABLE {PREFIX}form_{$new_form_id} SELECT * FROM {PREFIX}form_{$form_id}");
+                $db->query("INSERT {PREFIX}form_{$new_form_id} SELECT * FROM {PREFIX}form_{$form_id}");
                 $db->execute();
-                if ($history_table_exists) {
-                    $db->query("CREATE TABLE {PREFIX}form_{$new_form_id}_history SELECT * FROM {PREFIX}form_{$form_id}_history");
-                    $db->execute();
-                }
-            } else {
-                $db->query("CREATE TABLE {PREFIX}form_{$new_form_id} LIKE {PREFIX}form_{$form_id}");
+            }
+
+            if ($history_table_exists) {
+                $db->query("CREATE TABLE {PREFIX}form_{$new_form_id}_history LIKE {PREFIX}form_{$form_id}_history");
                 $db->execute();
-                if ($history_table_exists) {
-                    $db->query("CREATE TABLE {PREFIX}form_{$new_form_id}_history LIKE {PREFIX}form_{$form_id}_history");
+
+                if ($copy_submissions) {
+                    $db->query("INSERT {PREFIX}form_{$new_form_id}_history SELECT * FROM {PREFIX}form_{$form_id}_history");
                     $db->execute();
                 }
             }
@@ -120,16 +123,6 @@ class General
             self::rollbackForm($new_form_id);
             return array(false, "There was a problem creating the new table. Please report this error in Form Tools forums: " . $e->getMessage(), "");
         }
-
-        // now add the auto-increment, primary key
-//        $db->query("ALTER TABLE {PREFIX}form_{$new_form_id} ADD PRIMARY KEY (submission_id)");
-//        $db->execute();
-
-//        $db->query("ALTER TABLE {PREFIX}form_{$new_form_id} CHANGE submission_id submission_id MEDIUMINT(8) UNSIGNED NOT NULL AUTO_INCREMENT");
-//        $db->execute();
-
-        $db->query("ALTER TABLE {PREFIX}form_{$new_form_id} DEFAULT CHARSET=utf8");
-        $db->execute();
 
         return array(true, $new_form_id, $field_map);
     }

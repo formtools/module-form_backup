@@ -26,7 +26,7 @@
     <table cellspacing="0" cellpadding="0" class="form_backup_table">
         <tr>
             <td width="140">{$L.phrase_select_form}</td>
-            <td>{forms_dropdown name_id="form_id"}</td>
+            <td>{forms_dropdown name_id="form_id" form_status=""}</td>
         </tr>
     </table>
 
