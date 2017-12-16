@@ -16,8 +16,8 @@ class Module extends FormToolsModule
     protected $author = "Ben Keen";
     protected $authorEmail = "ben.keen@gmail.com";
     protected $authorLink = "https://formtools.org";
-    protected $version = "2.0.0";
-    protected $date = "2017-12-14";
+    protected $version = "2.0.1";
+    protected $date = "2017-12-15";
     protected $originLanguage = "en_us";
     protected $cssFiles = array("css/style.css");
 
@@ -29,7 +29,7 @@ class Module extends FormToolsModule
 
     public function install($module_id)
     {
-        Hooks::registerHook("template", "form_backup", "admin_forms_list_bottom", "", "fb_display_create_form_backup_button", 50, true);
+        Hooks::registerHook("template", "form_backup", "admin_forms_list_bottom", "", "displayCreateFormBackupButton", 50, true);
         Settings::set(array("show_backup_form_button" => "yes"), "form_backup");
         return array(true, "");
     }
