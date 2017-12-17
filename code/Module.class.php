@@ -16,8 +16,8 @@ class Module extends FormToolsModule
     protected $author = "Ben Keen";
     protected $authorEmail = "ben.keen@gmail.com";
     protected $authorLink = "https://formtools.org";
-    protected $version = "2.0.1";
-    protected $date = "2017-12-15";
+    protected $version = "2.0.2";
+    protected $date = "2017-12-17";
     protected $originLanguage = "en_us";
     protected $cssFiles = array("css/style.css");
 
@@ -40,7 +40,7 @@ class Module extends FormToolsModule
         $L = $this->getLangStrings();
 
         echo <<< END
-<div style="border-top: 1px solid #cccccc; margin: 10px 0px"></div>
+<div style="border-top: 1px solid #cccccc; margin: 10px 0"></div>
 <form action="$root_url/modules/form_backup/" method="post">
   <input type="submit" value="{$L["phrase_back_up_form"]}" />
 </form>

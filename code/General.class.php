@@ -16,15 +16,22 @@ class General
     {
         $db = Core::$db;
 
-        $new_form_id = self::addFormTableRecord($form_id, $settings);
-
         $copy_submissions = $settings["copy_submissions"];
         $form_permissions = $settings["form_permissions"];
 
-        // everything in this function from now on is rolled back pending a problem
-        try {
-            $field_map = self::addFormFieldsTableRecords($form_id, $new_form_id);
+        list ($success, $new_form_id, $error) = self::addFormTableRecord($form_id, $settings);
+        if (!$success) {
+            self::rollbackForm($new_form_id);
+            return array(false, $error);
+        }
 
+        list ($success, $field_map, $error) = self::addFormFieldsTableRecords($form_id, $new_form_id);
+        if (!$success) {
+            self::rollbackForm($new_form_id);
+            return array(false, $error);
+        }
+
+        try {
             if (!empty($field_map)) {
                 self::addFormFieldValidationAndSettings($new_form_id, $field_map);
             }
@@ -120,7 +127,9 @@ class General
             }
 
         } catch (Exception $e) {
-            self::rollbackForm($new_form_id);
+            if (!empty($new_form_id)) {
+                self::rollbackForm($new_form_id);
+            }
             return array(false, "There was a problem creating the new table. Please report this error in Form Tools forums: " . $e->getMessage(), "");
         }
 
@@ -388,21 +397,41 @@ class General
     }
 
 
+    /**
+     * If there was an error with any of the steps duplicating a form (not View), this method is called to clean up
+     * anything that was inserted.
+     * @param $form_id number the ID of the form that was just inserted.
+     */
     public static function rollbackForm($form_id)
     {
         $db = Core::$db;
 
-        $db->query("DELETE FROM {PREFIX}forms WHERE form_id = :form_id");
-        $db->bind("form_id", $form_id);
-        $db->execute();
+        try {
+            $db->query("DELETE FROM {PREFIX}forms WHERE form_id = :form_id");
+            $db->bind("form_id", $form_id);
+            $db->execute();
 
-        $db->query("DELETE FROM {PREFIX}form_email_fields WHERE form_id = :form_id");
-        $db->bind("form_id", $form_id);
-        $db->execute();
+            $db->query("DELETE FROM {PREFIX}form_fields WHERE form_id = :form_id");
+            $db->bind("form_id", $form_id);
+            $db->execute();
 
-        $db->query("DELETE FROM {PREFIX}form_fields WHERE form_id = :form_id");
-        $db->bind("form_id", $form_id);
-        $db->execute();
+            $db->query("DELETE FROM {PREFIX}form_email_fields WHERE form_id = :form_id");
+            $db->bind("form_id", $form_id);
+            $db->execute();
+
+            $db->query("DELETE FROM {PREFIX}client_forms WHERE form_id = :form_id");
+            $db->bind("form_id", $form_id);
+            $db->execute();
+
+            $db->query("DELETE FROM {PREFIX}public_form_omit_list WHERE form_id = :form_id");
+            $db->bind("form_id", $form_id);
+            $db->execute();
+
+            $db->query("DELETE TABLE IF EXISTS {PREFIX}form_{$form_id}");
+            $db->execute();
+        } catch (Exception $e) {
+
+        }
     }
 
 
@@ -444,10 +473,10 @@ class General
             $db->bindAll($form_data);
             $db->execute();
         } catch (Exception $e) {
-            return array(false, "Sorry, there was a problem creating the new record in the forms table. Please report this error in the Form Tools forums: " . mysql_error(), "");
+            return array(false, "", "Sorry, there was a problem creating the new record in the forms table. Please report this error in the Form Tools forums: " . $e->getMessage());
         }
 
-        return $db->getInsertId();
+        return array(true, $db->getInsertId(), "");
     }
 
 
@@ -467,22 +496,16 @@ class General
         ");
         $db->bind("form_id", $old_form_id);
         $db->execute();
+        $fields = $db->fetchAll();
 
         $field_map = array();
-        $fields = $db->fetchAll();
+
         foreach ($fields as $field_info) {
             $field_info["form_id"] = $new_form_id;
             $field_id = $field_info["field_id"];
             unset($field_info["field_id"]);
 
-            $col_names = array();
-            $placeholders = array();
-            foreach ($field_info as $col_name => $value) {
-                $col_names[] = $col_name;
-                $placeholders[] = ":{$col_name}";
-            }
-            $cols_str = join(", ", $col_names);
-            $placeholders = join(", ", $placeholders);
+            list($cols_str, $placeholders) = self::getInsertStatementParams($field_info);
 
             try {
                 $db->query("
@@ -495,12 +518,11 @@ class General
                 $field_map[$field_id] = $db->getInsertId();
             } catch (Exception $e) {
                 $error = $e->getMessage();
-                self::rollbackForm($new_form_id);
-                return array(false, "There was a problem inserting the new form's field info into the form_fields table. Please report this error in Form Tools forums: " . $error, "");
+                return array(false, "", "There was a problem inserting the new form's field info into the form_fields table. Please report this error in Form Tools forums: " . $error);
             }
         }
 
-        return $field_map;
+        return array(true, $field_map, "");
     }
 
 
@@ -521,29 +543,19 @@ class General
         $fields = $db->fetchAll();
 
         foreach ($fields as $field_info) {
-            $row["field_id"] = $field_map[$field_info["field_id"]];
 
-            $col_names = array();
-            $placeholders = array();
-            foreach ($field_info as $col_name => $value) {
-                $col_names[] = $col_name;
-                $placeholders[] = ":{$col_name}";
-            }
-            $cols_str = join(", ", $col_names);
-            $placeholders = join(", ", $placeholders);
+            // overwrite the old field ID with the new
+            $field_info["field_id"] = $field_map[$field_info["field_id"]];
 
-            try {
-                $db->query("
-                    INSERT INTO {PREFIX}field_validation ($cols_str)
-                    VALUES ($placeholders)
-                ");
-                $db->bindAll($field_info);
-                $db->execute();
-            } catch (Exception $e) {
-                $error = $e->getMessage();
-                self::rollbackForm($new_form_id);
-                return array(false, "There was a problem inserting the new form's validation rules into the field_validation table. Please report this error in Form Tools forums: " . $error, "");
-            }
+            list($cols_str, $placeholders) = self::getInsertStatementParams($field_info);
+
+            // note we don't thrown an error here - the callee will handle exceptions
+            $db->query("
+                INSERT INTO {PREFIX}field_validation ($cols_str)
+                VALUES ($placeholders)
+            ");
+            $db->bindAll($field_info);
+            $db->execute();
         }
 
         // now copy any field_settings
@@ -558,27 +570,14 @@ class General
         foreach ($fields as $field_info) {
             $field_info["field_id"] = $field_map[$field_info["field_id"]];
 
-            $col_names = array();
-            $placeholders = array();
-            foreach ($field_info as $col_name => $value) {
-                $col_names[] = $col_name;
-                $placeholders[] = ":{$col_name}";
-            }
-            $cols_str = join(", ", $col_names);
-            $placeholders = join(", ", $placeholders);
+            list($cols_str, $placeholders) = self::getInsertStatementParams($field_info);
 
-            try {
-                $db->query("
-                    INSERT INTO {PREFIX}field_settings ($cols_str)
-                    VALUES ($placeholders)
-                ");
-                $db->bindAll($field_info);
-                $db->execute();
-            } catch (Exception $e) {
-                $error = $e->getMessage();
-                self::rollbackForm($new_form_id);
-                return array(false, "There was a problem inserting the new form's field info into the field_settings table. Please report this error in Form Tools forums: " . $error, "");
-            }
+            $db->query("
+                INSERT INTO {PREFIX}field_settings ($cols_str)
+                VALUES ($placeholders)
+            ");
+            $db->bindAll($field_info);
+            $db->execute();
         }
     }
 
@@ -592,23 +591,17 @@ class General
         $rows = $db->fetchAll();
 
         foreach ($rows as $row) {
-            try {
-                $db->query("
-                    INSERT INTO {PREFIX}form_email_fields (form_id, email_field_id, first_name_field_id, last_name_field_id)
-                    VALUES (:form_id, :email_field_id, :first_name_field_id, :last_name_field_id)
-                ");
-                $db->bindAll(array(
-                    "form_id" => $new_form_id,
-                    "email_field_id" => $field_map[$row["email_field_id"]],
-                    "first_name_field_id" => !empty($row["first_name_field_id"]) ? $field_map[$row["first_name_field_id"]] : "",
-                    "last_name_field_id" => !empty($row["last_name_field_id"]) ? $field_map[$row["last_name_field_id"]] : ""
-                ));
-                $db->execute();
-            } catch (Exception $e) {
-                $error = $e->getMessage();
-                self::rollbackForm($new_form_id);
-                return array(false, "There was a problem inserting the new form's email field info into the form_email_fields table. Please report this error in Form Tools forums: " . $error, "");
-            }
+            $db->query("
+                INSERT INTO {PREFIX}form_email_fields (form_id, email_field_id, first_name_field_id, last_name_field_id)
+                VALUES (:form_id, :email_field_id, :first_name_field_id, :last_name_field_id)
+            ");
+            $db->bindAll(array(
+                "form_id" => $new_form_id,
+                "email_field_id" => $field_map[$row["email_field_id"]],
+                "first_name_field_id" => !empty($row["first_name_field_id"]) ? $field_map[$row["first_name_field_id"]] : "",
+                "last_name_field_id" => !empty($row["last_name_field_id"]) ? $field_map[$row["last_name_field_id"]] : ""
+            ));
+            $db->execute();
         }
     }
 
