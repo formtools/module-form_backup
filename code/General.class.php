@@ -3,6 +3,7 @@
 namespace FormTools\Modules\FormBackup;
 
 use FormTools\Core;
+use FormTools\Hooks;
 use PDO, Exception;
 
 
@@ -94,18 +95,6 @@ class General
                 }
             }
 
-            // if a history table exists, created by the Submission History module, make a copy of that too
-            $db->query("SHOW TABLES");
-            $db->execute();
-
-            $history_table_exists = false;
-            foreach ($db->fetchAll(PDO::FETCH_COLUMN) as $table_name) {
-                if ($table_name == "{PREFIX}form_{$form_id}_history") {
-                    $history_table_exists = true;
-                    break;
-                }
-            }
-
             // this copies the table + indexes
             $db->query("CREATE TABLE {PREFIX}form_{$new_form_id} LIKE {PREFIX}form_{$form_id}");
             $db->execute();
@@ -115,23 +104,14 @@ class General
                 $db->query("INSERT {PREFIX}form_{$new_form_id} SELECT * FROM {PREFIX}form_{$form_id}");
                 $db->execute();
             }
-
-            if ($history_table_exists) {
-                $db->query("CREATE TABLE {PREFIX}form_{$new_form_id}_history LIKE {PREFIX}form_{$form_id}_history");
-                $db->execute();
-
-                if ($copy_submissions) {
-                    $db->query("INSERT {PREFIX}form_{$new_form_id}_history SELECT * FROM {PREFIX}form_{$form_id}_history");
-                    $db->execute();
-                }
-            }
-
         } catch (Exception $e) {
             if (!empty($new_form_id)) {
                 self::rollbackForm($new_form_id);
             }
-            return array(false, "There was a problem creating the new table. Please report this error in Form Tools forums: " . $e->getMessage(), "");
+            return array(false, "There was a problem creating the new table. Please report this error in Form Tools forums: " . $e->getMessage());
         }
+
+        extract(Hooks::processHookCalls("end", compact("form_id", "new_form_id", "copy_submissions"), array()), EXTR_OVERWRITE);
 
         return array(true, $new_form_id, $field_map);
     }
@@ -378,6 +358,10 @@ class General
 
 
     /**
+     * Convenience method for constructing PDO-friendly insert statements. This is passed a hash of
+     * column names to values and returns an array with two indexes:
+     *          [0] a comma delimited list of col names, like "mycol1, mycol2, mycol3"
+     *          [1] a command delimited list of placeholders for thos same columns, like ":mycol1, :mycol2, :mycol3"
      * @param $hash array of columns => values
      * @return array
      */

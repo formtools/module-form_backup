@@ -5,7 +5,7 @@
         <td width="45"><a href="index.php"><img src="images/form_backup.gif" border="0" width="34" height="34"/></a>
         </td>
         <td class="title">
-            <a href="../">{$LANG.word_modules}</a>
+            <a href="../../admin/modules/">{$LANG.word_modules}</a>
             <span class="joiner">&raquo;</span>
             <a href="./">{$L.module_name}</a>
             <span class="joiner">&raquo;</span>
