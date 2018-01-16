@@ -615,7 +615,7 @@ class General
                 ));
                 $db->execute();
             } catch (Exception $e) {
-                return array(false, "Sorry, there was a problem duplicating the View field group information. Please report this error in the Form Tools forums: " . mysql_error());
+                return array(false, "Sorry, there was a problem duplicating the View field group information. Please report this error in the Form Tools forums: " . $e->getMessage());
             }
 
             $view_field_group_id_map[$old_group_id] = $db->getInsertId();
